@@ -7,6 +7,8 @@ from langchain.vectorstores import Milvus
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import json 
+import psycopg2
+
 # Initialize the Flask app
 app = Flask(__name__)
 load_dotenv()
@@ -17,6 +19,24 @@ ZILLIZ_URI=os.getenv("ZILLIZ_URI")
 ZILLIZ_USER=os.getenv("ZILLIZ_USER")
 ZILLIZ_PASSWORD=os.getenv("ZILLIZ_PASSWORD")
 
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+
+# postgre
+def get_db_connection():
+    conn = psycopg2.connect(
+        dbname=DB_NAME, 
+        user=DB_USER, 
+        password=DB_PASS, 
+        host=DB_HOST, 
+        port=DB_PORT
+    )
+    return conn
+
+# vector database
 def get_db():
     embeddings = OpenAIEmbeddings()
     database = Milvus(
@@ -96,7 +116,7 @@ def generate_answer(query, user_id):
     Response and Classification:"""
 
     response = openai.ChatCompletion.create(
-        model="gpt-4-1106-preview",
+        model="gpt-3.5-turbo-1106",
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": query}
@@ -115,25 +135,31 @@ def generate_answer(query, user_id):
     return dic["message_to"]
 
 
-# Define a route to handle incoming requests
 @app.route("/chatgpt", methods=["POST"])
 def chatgpt():
-    # try:
-    print(request.values)
-    wa_id = request.values.get("WaId", "")
-    incoming_msg = request.values.get("Body", "").lower()
-    print("Question: ", incoming_msg)
-    add_message_to_history(wa_id, "Customer", incoming_msg)
-    # Generate the answer using GPT-4
-    answer = generate_answer(incoming_msg, wa_id)
-    print("BOT Answer: ", answer)
-    add_message_to_history(wa_id, "Bot", answer)
-    bot_resp = MessagingResponse()
-    bot_resp.message(answer)
-    return str(bot_resp)
-    # except Exception as e:
-        # print("Error: ", e)
-        # return str(MessagingResponse().message("An error occurred."))
+    try:
+        conn = get_db_connection()
+        print(request.values)
+        wa_id = request.values.get("WaId", "")
+        incoming_msg = request.values.get("Body", "").lower()
+        print("Question: ", incoming_msg)
+        add_message_to_history(wa_id, "Customer", incoming_msg)
+        
+        # Generate the answer using GPT-4
+        answer = generate_answer(incoming_msg, wa_id)
+        print("BOT Answer: ", answer)
+        add_message_to_history(wa_id, "Bot", answer)
+
+        conn.close()
+
+        bot_resp = MessagingResponse()
+        bot_resp.message(answer)
+        return str(bot_resp)
+
+    except Exception as e:
+        print("Error: ", e)
+        return str(MessagingResponse().message("Sorry, an error occurred. Please try again."))
+
 
 # Run the Flask app
 if __name__ == "__main__":
