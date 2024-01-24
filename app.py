@@ -93,7 +93,6 @@ def generate_answer(query, user_id):
         "message_to" : "message to client",
     }}
 
-
     Classify the message as either an "Order", "Complaint", "Review", or "Suggestion".
     
     Respond in the language used by the customer, either Kazakh, Russian, or English. All information about Ocean Basket is available in {docs_page_content}.
